@@ -37,6 +37,11 @@ logic axil_rstn;
 logic axis_clk;
 logic axis_rstn;
 
+// HBM时钟信号
+logic hbm_clk_p;
+logic hbm_clk_n;
+logic hbm_rst_n;
+
 // Metadata
 logic [USER_META_DATA_WIDTH-1:0] user_metadata_out;
 logic                            user_metadata_out_valid;
@@ -1429,10 +1434,60 @@ rdma_rn_wrapper rdma_rn_wrapper_inst (
 // Always receive packets sent to CMAC tx path
 assign m_axis_cmac_tx_tready =1'b1;
 
-// AXI crossbar used to access device memory
+// HBM时钟和复位信号
+assign hbm_rst_n = axis_rstn;
 
-axi_3to1_interconnect_to_dev_mem axi_interconnect_to_dev_mem_inst(
+// HBM时钟生成器
+hbm_clk_gen hbm_clk_gen_inst (
+  .rst_n      (hbm_rst_n),
+  .hbm_clk_p  (hbm_clk_p),
+  .hbm_clk_n  (hbm_clk_n)
+);
+
+// HBM APB控制接口信号
+logic [21:0] hbm_apb_paddr;
+logic        hbm_apb_penable;
+logic [2:0]  hbm_apb_pprot;
+logic        hbm_apb_pready;
+logic        hbm_apb_psel;
+logic [31:0] hbm_apb_pwdata;
+logic        hbm_apb_pwrite;
+logic [31:0] hbm_apb_prdata;
+logic        hbm_apb_pslverr;
+
+// 简单的APB控制逻辑 (仿真中不需要复杂的HBM配置)
+assign hbm_apb_paddr = 22'd0;
+assign hbm_apb_penable = 1'b0;
+assign hbm_apb_pprot = 3'd0;
+assign hbm_apb_pready = 1'b1;
+assign hbm_apb_psel = 1'b0;
+assign hbm_apb_pwdata = 32'd0;
+assign hbm_apb_pwrite = 1'b0;
+
+// HBM系统仿真模块 - 替换原来的axi_3to1_interconnect_to_dev_mem
+design_1_sim_wrapper hbm_system_sim_inst(
   
+  // 系统时钟和复位
+  .axis_aclk                             (axis_clk),
+  .axis_arestn                           (axis_rstn),
+  .pcie_rstn                             (axis_rstn),
+  
+  // HBM物理接口
+  .hbm_clk_clk_p                         (hbm_clk_p),
+  .hbm_clk_clk_n                         (hbm_clk_n),
+  
+  // HBM APB配置接口
+  .SAPB_0_paddr                          (hbm_apb_paddr),
+  .SAPB_0_penable                        (hbm_apb_penable),
+  .SAPB_0_pprot                          (hbm_apb_pprot),
+  .SAPB_0_pready                         (hbm_apb_pready),
+  .SAPB_0_psel                           (hbm_apb_psel),
+  .SAPB_0_pwdata                         (hbm_apb_pwdata),
+  .SAPB_0_pwrite                         (hbm_apb_pwrite),
+  .SAPB_0_prdata                         (hbm_apb_prdata),
+  .SAPB_0_pslverr                        (hbm_apb_pslverr),
+  
+  // Slave AXI接口0 - QDMA MM
   .s_axi_qdma_mm_awid                    (m_axi_init_dev_awid),
   .s_axi_qdma_mm_awaddr                  (m_axi_init_dev_awaddr),
   .s_axi_qdma_mm_awqos                   (m_axi_init_dev_awqos),
@@ -1471,7 +1526,8 @@ axi_3to1_interconnect_to_dev_mem axi_interconnect_to_dev_mem_inst(
   .s_axi_qdma_mm_arlock                  (m_axi_veri_dev_arlock),
   .s_axi_qdma_mm_arqos                   (m_axi_veri_dev_arqos),
 
-  .s_axi_compute_logic_awid              (axi_compute_logic_awid),
+  // Slave AXI接口1 - Compute Logic
+  .s_axi_compute_logic_awid              (axi_compute_logic_awid[0:0]),
   .s_axi_compute_logic_awaddr            (axi_compute_logic_awaddr),
   .s_axi_compute_logic_awqos             (axi_compute_logic_awqos),
   .s_axi_compute_logic_awlen             (axi_compute_logic_awlen),
@@ -1487,11 +1543,11 @@ axi_3to1_interconnect_to_dev_mem axi_interconnect_to_dev_mem_inst(
   .s_axi_compute_logic_wvalid            (axi_compute_logic_wvalid),
   .s_axi_compute_logic_wready            (axi_compute_logic_wready),
   .s_axi_compute_logic_awlock            (axi_compute_logic_awlock),
-  .s_axi_compute_logic_bid               (axi_compute_logic_bid),
+  .s_axi_compute_logic_bid               (axi_compute_logic_bid[0:0]),
   .s_axi_compute_logic_bresp             (axi_compute_logic_bresp),
   .s_axi_compute_logic_bvalid            (axi_compute_logic_bvalid),
   .s_axi_compute_logic_bready            (axi_compute_logic_bready),
-  .s_axi_compute_logic_arid              (axi_compute_logic_arid),
+  .s_axi_compute_logic_arid              (axi_compute_logic_arid[0:0]),
   .s_axi_compute_logic_araddr            (axi_compute_logic_araddr),
   .s_axi_compute_logic_arlen             (axi_compute_logic_arlen),
   .s_axi_compute_logic_arsize            (axi_compute_logic_arsize),
@@ -1500,7 +1556,7 @@ axi_3to1_interconnect_to_dev_mem axi_interconnect_to_dev_mem_inst(
   .s_axi_compute_logic_arprot            (axi_compute_logic_arprot),
   .s_axi_compute_logic_arvalid           (axi_compute_logic_arvalid),
   .s_axi_compute_logic_arready           (axi_compute_logic_arready),
-  .s_axi_compute_logic_rid               (axi_compute_logic_rid),
+  .s_axi_compute_logic_rid               (axi_compute_logic_rid[0:0]),
   .s_axi_compute_logic_rdata             (axi_compute_logic_rdata),
   .s_axi_compute_logic_rresp             (axi_compute_logic_rresp),
   .s_axi_compute_logic_rlast             (axi_compute_logic_rlast),
@@ -1509,6 +1565,7 @@ axi_3to1_interconnect_to_dev_mem axi_interconnect_to_dev_mem_inst(
   .s_axi_compute_logic_arlock            (axi_compute_logic_arlock),
   .s_axi_compute_logic_arqos             (axi_compute_logic_arqos),
 
+  // Slave AXI接口2 - System Crossbar
   .s_axi_from_sys_crossbar_awid          (axi_from_sys_to_dev_crossbar_awid),
   .s_axi_from_sys_crossbar_awaddr        (axi_from_sys_to_dev_crossbar_awaddr),
   .s_axi_from_sys_crossbar_awqos         (axi_from_sys_to_dev_crossbar_awqos),
@@ -1545,50 +1602,7 @@ axi_3to1_interconnect_to_dev_mem axi_interconnect_to_dev_mem_inst(
   .s_axi_from_sys_crossbar_rvalid        (axi_from_sys_to_dev_crossbar_rvalid),
   .s_axi_from_sys_crossbar_rready        (axi_from_sys_to_dev_crossbar_rready),
   .s_axi_from_sys_crossbar_arlock        (axi_from_sys_to_dev_crossbar_arlock),
-  .s_axi_from_sys_crossbar_arqos         (axi_from_sys_to_dev_crossbar_arqos),
-
-  .m_axi_dev_mem_awaddr                  (axi_dev_mem_awaddr),
-  .m_axi_dev_mem_awprot                  (axi_dev_mem_awprot),
-  .m_axi_dev_mem_awvalid                 (axi_dev_mem_awvalid),
-  .m_axi_dev_mem_awready                 (axi_dev_mem_awready),
-  .m_axi_dev_mem_awsize                  (axi_dev_mem_awsize),
-  .m_axi_dev_mem_awburst                 (axi_dev_mem_awburst),
-  .m_axi_dev_mem_awcache                 (axi_dev_mem_awcache),
-  .m_axi_dev_mem_awlen                   (axi_dev_mem_awlen),
-  .m_axi_dev_mem_awlock                  (axi_dev_mem_awlock),
-  .m_axi_dev_mem_awqos                   (axi_dev_mem_awqos),
-  .m_axi_dev_mem_awregion                (axi_dev_mem_awregion),
-  .m_axi_dev_mem_awid                    (axi_dev_mem_awid),
-  .m_axi_dev_mem_wdata                   (axi_dev_mem_wdata),
-  .m_axi_dev_mem_wstrb                   (axi_dev_mem_wstrb),
-  .m_axi_dev_mem_wvalid                  (axi_dev_mem_wvalid),
-  .m_axi_dev_mem_wready                  (axi_dev_mem_wready),
-  .m_axi_dev_mem_wlast                   (axi_dev_mem_wlast),
-  .m_axi_dev_mem_bresp                   (axi_dev_mem_bresp),
-  .m_axi_dev_mem_bvalid                  (axi_dev_mem_bvalid),
-  .m_axi_dev_mem_bready                  (axi_dev_mem_bready),
-  .m_axi_dev_mem_bid                     (axi_dev_mem_bid),
-  .m_axi_dev_mem_araddr                  (axi_dev_mem_araddr),
-  .m_axi_dev_mem_arprot                  (axi_dev_mem_arprot),
-  .m_axi_dev_mem_arvalid                 (axi_dev_mem_arvalid),
-  .m_axi_dev_mem_arready                 (axi_dev_mem_arready),
-  .m_axi_dev_mem_arsize                  (axi_dev_mem_arsize),
-  .m_axi_dev_mem_arburst                 (axi_dev_mem_arburst),
-  .m_axi_dev_mem_arcache                 (axi_dev_mem_arcache),
-  .m_axi_dev_mem_arlock                  (axi_dev_mem_arlock),
-  .m_axi_dev_mem_arlen                   (axi_dev_mem_arlen),
-  .m_axi_dev_mem_arqos                   (axi_dev_mem_arqos),
-  .m_axi_dev_mem_arregion                (axi_dev_mem_arregion),
-  .m_axi_dev_mem_arid                    (axi_dev_mem_arid),
-  .m_axi_dev_mem_rdata                   (axi_dev_mem_rdata),
-  .m_axi_dev_mem_rresp                   (axi_dev_mem_rresp),
-  .m_axi_dev_mem_rvalid                  (axi_dev_mem_rvalid),
-  .m_axi_dev_mem_rready                  (axi_dev_mem_rready),
-  .m_axi_dev_mem_rlast                   (axi_dev_mem_rlast),
-  .m_axi_dev_mem_rid                     (axi_dev_mem_rid), 
-
-  .axis_aclk                             (axis_clk),
-  .axis_arestn                           (axis_rstn)   
+  .s_axi_from_sys_crossbar_arqos         (axi_from_sys_to_dev_crossbar_arqos)   
 );
 
 axi_interconnect_to_dev_mem axi_2to1_for_send_write_payload_to_dev_mem(
@@ -2598,48 +2612,7 @@ assign m_axi_rdma1_get_payload_arqos = 4'd0;
 assign m_axi_rdma2_get_payload_awqos = 4'd0;
 assign m_axi_rdma2_get_payload_arqos = 4'd0;
 
-// Memory subsytem
-// -- used AXI-MM BRAM to replace device DDR at the moment
-// -- 512KB for system memory
-axi_mm_bram axi_dev_mem_inst (
-  .s_axi_aclk      (axis_clk),
-  .s_axi_aresetn   (axis_rstn),
-  .s_axi_awid      (axi_dev_mem_awid),
-  .s_axi_awaddr    (axi_dev_mem_awaddr[18:0]),
-  .s_axi_awlen     (axi_dev_mem_awlen),
-  .s_axi_awsize    (axi_dev_mem_awsize),
-  .s_axi_awburst   (axi_dev_mem_awburst),
-  .s_axi_awlock    (axi_dev_mem_awlock),
-  .s_axi_awcache   (axi_dev_mem_awcache),
-  .s_axi_awprot    (axi_dev_mem_awprot),
-  .s_axi_awvalid   (axi_dev_mem_awvalid),
-  .s_axi_awready   (axi_dev_mem_awready),
-  .s_axi_wdata     (axi_dev_mem_wdata),
-  .s_axi_wstrb     (axi_dev_mem_wstrb),
-  .s_axi_wlast     (axi_dev_mem_wlast),
-  .s_axi_wvalid    (axi_dev_mem_wvalid),
-  .s_axi_wready    (axi_dev_mem_wready),
-  .s_axi_bid       (axi_dev_mem_bid),
-  .s_axi_bresp     (axi_dev_mem_bresp),
-  .s_axi_bvalid    (axi_dev_mem_bvalid),
-  .s_axi_bready    (axi_dev_mem_bready),
-  .s_axi_arid      (axi_dev_mem_arid),
-  .s_axi_araddr    (axi_dev_mem_araddr[18:0]),
-  .s_axi_arlen     (axi_dev_mem_arlen),
-  .s_axi_arsize    (axi_dev_mem_arsize),
-  .s_axi_arburst   (axi_dev_mem_arburst),
-  .s_axi_arlock    (axi_dev_mem_arlock),
-  .s_axi_arcache   (axi_dev_mem_arcache),
-  .s_axi_arprot    (axi_dev_mem_arprot),
-  .s_axi_arvalid   (axi_dev_mem_arvalid),
-  .s_axi_arready   (axi_dev_mem_arready),
-  .s_axi_rid       (axi_dev_mem_rid),
-  .s_axi_rdata     (axi_dev_mem_rdata),
-  .s_axi_rresp     (axi_dev_mem_rresp),
-  .s_axi_rlast     (axi_dev_mem_rlast),
-  .s_axi_rvalid    (axi_dev_mem_rvalid),
-  .s_axi_rready    (axi_dev_mem_rready)
-);
+// 注意: 设备内存已经集成在HBM系统模块中，不需要单独的BRAM实例
 
 // Memory subsytem
 // -- used AXI-MM BRAM to replace system DDR at the moment
