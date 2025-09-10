@@ -360,7 +360,7 @@ dict for {ip ip_dir} $ip_dict {
 # This enables the top-level to instantiate `design_1` generated from the BD
 set hbm_bd_tcl "${src_dir}/hbm_subsystem/design_1.tcl"
 if {[file exists $hbm_bd_tcl]} {
-    puts "INFO: [HBM] Importing HBM subsystem BD from $hbm_bd_tcl"
+    puts "INFO: \[HBM\] Importing HBM subsystem BD from $hbm_bd_tcl"
     # Source the BD TCL to create the block design in the current project
     source $hbm_bd_tcl
 
@@ -376,7 +376,7 @@ if {[file exists $hbm_bd_tcl]} {
         }
     }
 } else {
-    puts "INFO: [HBM] No HBM BD TCL found at $hbm_bd_tcl; skipping BD import"
+    puts "INFO: \[HBM\] No HBM BD TCL found at $hbm_bd_tcl; skipping BD import"
 }
 
 # Read user plugin files
